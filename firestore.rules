@@ -1,0 +1,133 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /tasks/{taskId} {
+      function signedIn() {
+        return request.auth != null;
+      }
+
+      function isCreator() {
+        return resource.data.createdBy == request.auth.uid;
+      }
+
+      function isAssignee() {
+        return resource.data.assigneeEmail != null
+          && resource.data.assigneeEmail == request.auth.token.get('email', '').lower();
+      }
+
+      function isValidTask(data) {
+        return data.title is string
+          && data.title.size() > 0
+          && data.title.size() <= 200
+          && data.status in ['todo', 'in_progress', 'done']
+          && data.priority in ['low', 'medium', 'high'];
+      }
+
+      allow read: if signedIn();
+
+      allow create: if signedIn()
+        && request.resource.data.createdBy == request.auth.uid
+        && isValidTask(request.resource.data);
+
+      // The creator or the assignee may edit, but never change who created it.
+      allow update: if signedIn()
+        && (isCreator() || isAssignee())
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.createdByEmail == resource.data.createdByEmail
+        && request.resource.data.createdAt == resource.data.createdAt
+        && isValidTask(request.resource.data);
+
+      allow delete: if signedIn() && isCreator();
+    }
+
+    // Public profiles, written by each user on sign-in (see users.service.ts).
+    match /users/{uid} {
+      allow read: if request.auth != null;
+      allow create, update: if request.auth != null && request.auth.uid == uid;
+    }
+
+    match /customers/{customerId} {
+      function signedIn() {
+        return request.auth != null;
+      }
+
+      function currentUserRef() {
+        return /databases/$(database)/documents/users/$(request.auth.uid);
+      }
+
+      // Mirrors customerFormSchema in src/features/customers/schema.ts.
+      function isValidCustomer(data) {
+        return data.name is string
+          && data.name.size() > 0
+          && data.name.size() <= 200
+          && data.email is string
+          && data.email.matches('^[^@ ]+@[^@ ]+[.][^@ ]+$')
+          && data.status in ['active', 'inactive']
+          && data.priority in ['high', 'medium', 'low']
+          && data.get('description', '') is string
+          && data.get('description', '').size() <= 2000
+          && (data.get('assignedTo', null) == null || data.assignedTo is path);
+      }
+
+      allow read: if signedIn();
+
+      allow create: if signedIn()
+        && request.resource.data.createdBy == currentUserRef()
+        && request.resource.data.updatedBy == currentUserRef()
+        && isValidCustomer(request.resource.data);
+
+      // Any signed-in user may edit, but must stamp themselves as updatedBy
+      // and never change who created it.
+      allow update: if signedIn()
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.updatedBy == currentUserRef()
+        && isValidCustomer(request.resource.data);
+
+      allow delete: if signedIn() && resource.data.createdBy == currentUserRef();
+
+      match /activities/{activityId} {
+        function customer() {
+          return get(/databases/$(database)/documents/customers/$(customerId));
+        }
+
+        // Mirrors activityFormSchema in src/features/customers/schema.ts.
+        // Fields that don't apply to the type are stored as null.
+        function isValidActivity(data) {
+          return data.type in ['call', 'email', 'meeting', 'note']
+            && data.date is timestamp
+            && (data.type == 'call'
+              ? data.get('callQuality', null) == null
+                || data.callQuality in ['good', 'average', 'poor']
+              : data.get('content', null) is string
+                && data.content.size() > 0
+                && data.content.size() <= 5000)
+            && (data.get('note', null) == null
+              || (data.note is string && data.note.size() <= 2000));
+        }
+
+        allow read: if signedIn();
+
+        allow create: if signedIn()
+          && exists(/databases/$(database)/documents/customers/$(customerId))
+          && request.resource.data.createdBy == currentUserRef()
+          && request.resource.data.updatedBy == currentUserRef()
+          && isValidActivity(request.resource.data);
+
+        // Only the author may edit their activity.
+        allow update: if signedIn()
+          && resource.data.createdBy == currentUserRef()
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.updatedBy == currentUserRef()
+          && isValidActivity(request.resource.data);
+
+        // The author, or the customer's creator (needed to delete the customer).
+        allow delete: if signedIn()
+          && (resource.data.createdBy == currentUserRef()
+            || customer().data.createdBy == currentUserRef());
+      }
+    }
+  }
+}
