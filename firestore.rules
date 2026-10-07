@@ -56,6 +56,10 @@ service cloud.firestore {
         return /databases/$(database)/documents/users/$(request.auth.uid);
       }
 
+      function customer() {
+        return get(/databases/$(database)/documents/customers/$(customerId));
+      }
+
       // Mirrors customerFormSchema in src/features/customers/schema.ts.
       function isValidCustomer(data) {
         return data.name is string
@@ -88,10 +92,6 @@ service cloud.firestore {
       allow delete: if signedIn() && resource.data.createdBy == currentUserRef();
 
       match /activities/{activityId} {
-        function customer() {
-          return get(/databases/$(database)/documents/customers/$(customerId));
-        }
-
         // Mirrors activityFormSchema in src/features/customers/schema.ts.
         // Fields that don't apply to the type are stored as null.
         function isValidActivity(data) {
@@ -126,6 +126,34 @@ service cloud.firestore {
         // The author, or the customer's creator (needed to delete the customer).
         allow delete: if signedIn()
           && (resource.data.createdBy == currentUserRef()
+            || customer().data.createdBy == currentUserRef());
+      }
+
+      // Metadata for files stored in Storage (see storage.rules). Immutable.
+      match /files/{fileId} {
+        function isValidFile(data) {
+          return data.name is string
+            && data.name.size() > 0
+            && data.name.size() <= 500
+            && data.url is string
+            && data.contentType is string
+            && data.size is int
+            && data.size <= 10 * 1024 * 1024
+            && data.storagePath is string
+            && data.storagePath.matches('customers/' + customerId + '/files/' + fileId + '-.+')
+            && data.uploadedAt == request.time;
+        }
+
+        allow read: if signedIn();
+
+        allow create: if signedIn()
+          && exists(/databases/$(database)/documents/customers/$(customerId))
+          && request.resource.data.uploadedBy == currentUserRef()
+          && isValidFile(request.resource.data);
+
+        // The uploader, or the customer's creator (needed to delete the customer).
+        allow delete: if signedIn()
+          && (resource.data.uploadedBy == currentUserRef()
             || customer().data.createdBy == currentUserRef());
       }
     }

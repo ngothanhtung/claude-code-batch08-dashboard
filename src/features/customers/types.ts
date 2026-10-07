@@ -137,3 +137,43 @@ export function formatActivityDate(date: Date) {
     timeStyle: "short",
   })
 }
+
+/** Max upload size; also enforced in `storage.rules`. */
+export const MAX_FILE_SIZE = 10 * 1024 * 1024
+
+/**
+ * Stored in the `customers/{customerId}/files` subcollection; the file itself
+ * is in Storage at `storagePath` (`customers/{customerId}/files/...`).
+ */
+export type CustomerFile = {
+  id: string
+  customerId: string
+  name: string
+  /** Download URL from Firebase Storage. */
+  url: string
+  /** MIME type, e.g. `application/pdf`. */
+  contentType: string
+  /** Bytes. */
+  size: number
+  storagePath: string
+  uploadedAt: Date | null
+  /** Uid, stored as a `users/{uid}` reference in Firestore. */
+  uploadedBy: string
+}
+
+/** Mirrors the rules: the uploader or the customer's creator may delete. */
+export function canDeleteCustomerFile(
+  file: CustomerFile,
+  customer: Customer,
+  user: CurrentUser
+) {
+  return (
+    !!user && (file.uploadedBy === user.uid || customer.createdBy === user.uid)
+  )
+}
+
+export function formatFileSize(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}

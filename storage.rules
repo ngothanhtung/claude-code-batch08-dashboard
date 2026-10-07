@@ -1,0 +1,33 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Customer attachments; each has a document in customers/{id}/files.
+    // firestore.get()/exists() need the Storage service agent to have
+    // roles/firebaserules.firestoreServiceAgent; `firebase deploy` offers to grant it
+    // when the rules change (skipped with --non-interactive).
+    match /customers/{customerId}/files/{fileName} {
+      function signedIn() {
+        return request.auth != null;
+      }
+
+      function customerPath() {
+        return /databases/(default)/documents/customers/$(customerId);
+      }
+
+      allow read: if signedIn();
+
+      // Keep the size limit in sync with MAX_FILE_SIZE in types.ts.
+      allow create: if signedIn()
+        && firestore.exists(customerPath())
+        && request.resource.size <= 10 * 1024 * 1024
+        && request.resource.metadata.uploadedBy == request.auth.uid;
+
+      // The uploader, or the customer's creator (needed to delete the customer).
+      allow delete: if signedIn()
+        && (resource.metadata.uploadedBy == request.auth.uid
+          || firestore.get(customerPath()).data.createdBy
+            == /databases/(default)/documents/users/$(request.auth.uid));
+    }
+  }
+}

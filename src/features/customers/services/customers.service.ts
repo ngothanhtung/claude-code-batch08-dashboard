@@ -17,6 +17,10 @@ import {
 
 import { auth, db } from "@/lib/firebase"
 import { activitiesCollection } from "@/features/customers/services/activities.service"
+import {
+  deleteCustomerFile,
+  getCustomerFiles,
+} from "@/features/customers/services/files.service"
 import type { Customer, CustomerInput } from "@/features/customers/types"
 import { userRef } from "@/features/users/services/users.service"
 
@@ -93,20 +97,28 @@ export async function updateCustomer(id: string, input: CustomerInput) {
 /** Max writes per batch is 500; leave headroom. */
 const BATCH_SIZE = 400
 
-/**
- * Deletes the customer and its activities. Firestore doesn't delete
- * subcollections with their parent, so the activities go first.
- */
-export async function deleteCustomer(id: string) {
-  requireUser()
-  const activities = await getDocs(activitiesCollection(id))
-  for (let i = 0; i < activities.docs.length; i += BATCH_SIZE) {
+async function deleteInBatches(refs: DocumentReference[]) {
+  for (let i = 0; i < refs.length; i += BATCH_SIZE) {
     const batch = writeBatch(db)
-    for (const activity of activities.docs.slice(i, i + BATCH_SIZE)) {
-      batch.delete(activity.ref)
+    for (const ref of refs.slice(i, i + BATCH_SIZE)) {
+      batch.delete(ref)
     }
     await batch.commit()
   }
+}
+
+/**
+ * Deletes the customer with its activities and files. Firestore doesn't
+ * delete subcollections with their parent, so those go first.
+ */
+export async function deleteCustomer(id: string) {
+  requireUser()
+  // Each file also has an object in Storage to remove.
+  for (const file of await getCustomerFiles(id)) {
+    await deleteCustomerFile(file)
+  }
+  const activities = await getDocs(activitiesCollection(id))
+  await deleteInBatches(activities.docs.map((activity) => activity.ref))
   await deleteDoc(doc(customersCollection, id))
 }
 
@@ -123,10 +135,17 @@ export function getCustomerErrorMessage(error: unknown) {
     switch (error.code) {
       case "permission-denied":
         return "You don't have permission to do this."
+      case "storage/unauthorized":
+        return "Storage denied access to this file."
       case "not-found":
         return "This customer no longer exists."
       case "unavailable":
-        return "Can't reach the database. Check your connection."
+      case "storage/retry-limit-exceeded":
+        return "Can't reach the server. Check your connection."
+      case "storage/canceled":
+        return "The upload was canceled."
+      case "storage/quota-exceeded":
+        return "Storage quota exceeded."
     }
   }
   return error instanceof Error ? error.message : "Something went wrong."

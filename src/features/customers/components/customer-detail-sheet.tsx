@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/sheet"
 import { Skeleton } from "@/components/ui/skeleton"
 import { CustomerActivities } from "@/features/customers/components/customer-activities"
+import { CustomerFiles } from "@/features/customers/components/customer-files"
 import {
   CustomerPriorityBadge,
   CustomerStatusBadge,
@@ -126,6 +127,7 @@ function CustomerDetailContent({
           </div>
         </dl>
 
+        <CustomerFiles customer={customer} users={users} />
         <CustomerActivities customer={customer} users={users} />
       </div>
     </>

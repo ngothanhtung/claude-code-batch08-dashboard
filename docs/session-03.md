@@ -81,3 +81,21 @@ lưu trữ và subCollection: activities
   Dùng shadcn/ui để tạo form nhập liệu cho hoạt động.
   Dùng React Hook Form để quản lý trạng thái form.
   Dùng Zod để xác thực dữ liệu form.
+
+---
+
+Tôi muốn đính kèm files cho khách hàng, 1 khách hàng có thể có nhiều files.
+
+- File (Tệp đính kèm)
+  - Tên file (String)
+  - URL (String)
+  - Loại file (String)
+  - Ngày tải lên (Timestamp)
+  - Tải lên bởi (Ref (users/uid))
+
+Lưu trữ trong subCollection: files
+
+Dùng Firebase Storage để lưu trữ files
+
+Quy tắc lưu file trên Storage:
+customers/{customerId}/files/{fileId}
