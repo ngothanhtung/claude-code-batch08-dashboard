@@ -29,5 +29,25 @@ service firebase.storage {
           || firestore.get(customerPath()).data.createdBy
             == /databases/(default)/documents/users/$(request.auth.uid));
     }
+
+    // Chat attachments; listed in the message's `attachments` field.
+    match /conversations/{conversationId}/messages/{messageId}/{fileName} {
+      function isMember() {
+        return request.auth != null
+          && request.auth.uid in firestore.get(
+            /databases/(default)/documents/conversations/$(conversationId)).data.memberIds;
+      }
+
+      allow read: if isMember();
+
+      // Keep the size limit in sync with MAX_ATTACHMENT_SIZE in chat/types.ts.
+      allow create: if isMember()
+        && request.resource.size <= 10 * 1024 * 1024
+        && request.resource.metadata.uploadedBy == request.auth.uid;
+
+      // Only for cleaning up when sending the message fails.
+      allow delete: if request.auth != null
+        && resource.metadata.uploadedBy == request.auth.uid;
+    }
   }
 }

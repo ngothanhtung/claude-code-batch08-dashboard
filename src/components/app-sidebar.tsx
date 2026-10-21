@@ -14,7 +14,7 @@ import {
   SidebarHeader,
   SidebarRail,
 } from "@/components/ui/sidebar"
-import { GalleryVerticalEndIcon, LayoutDashboardIcon, ListTodoIcon, UsersIcon, AudioLinesIcon, TerminalIcon, TerminalSquareIcon, BotIcon, BookOpenIcon, Settings2Icon, FrameIcon, PieChartIcon, MapIcon } from "lucide-react"
+import { GalleryVerticalEndIcon, LayoutDashboardIcon, ListTodoIcon, UsersIcon, ChartColumnIcon, MessagesSquareIcon, TrophyIcon, AudioLinesIcon, TerminalIcon, TerminalSquareIcon, BotIcon, BookOpenIcon, Settings2Icon, FrameIcon, PieChartIcon, MapIcon } from "lucide-react"
 
 // This is sample data.
 const data = {
@@ -59,6 +59,21 @@ const data = {
       title: "Customers",
       url: "/customers",
       icon: <UsersIcon />,
+    },
+    {
+      title: "Revenues",
+      url: "/revenues",
+      icon: <ChartColumnIcon />,
+    },
+    {
+      title: "Chat",
+      url: "/chat",
+      icon: <MessagesSquareIcon />,
+    },
+    {
+      title: "Gameshow",
+      url: "/gameshow",
+      icon: <TrophyIcon />,
     },
     {
       title: "Playground",
